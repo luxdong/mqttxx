@@ -8,9 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::db::Db;
-use crate::settings;
-
 const RELEASE_API: &str = "https://gitee.com/api/v5/repos/oslu/mqttxx/releases/latest";
 
 #[derive(Debug, Deserialize)]
@@ -76,28 +73,12 @@ fn is_newer(latest: &str, current: &str) -> bool {
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
     let current = app.package_info().version.to_string();
-
-    // 可选的 Gitee 私人令牌：带认证调用解除匿名限流
-    let mut url = RELEASE_API.to_string();
-    let token = {
-        let state = app.state::<Db>();
-        let conn = state.0.lock().unwrap();
-        settings::get(&conn).gitee_token
-    };
-    if !token.trim().is_empty() {
-        url.push_str(&format!("?access_token={}", token.trim()));
-    }
-
-    let resp = reqwest::get(&url)
+    let resp = reqwest::get(RELEASE_API)
         .await
         .map_err(|e| format!("network: {e}"))?;
     if !resp.status().is_success() {
         match resp.status().as_u16() {
-            403 => {
-                return Err(
-                    "Gitee 匿名请求被限流(403)：请稍后再试，或在设置中配置 Gitee 私人令牌".into(),
-                )
-            }
+            403 => return Err("Gitee 匿名请求被限流(403)：请稍后再试".into()),
             404 => {
                 return Err(
                     "gitee API 404: repository is private or has no release yet (make the repo public on gitee.com)"
