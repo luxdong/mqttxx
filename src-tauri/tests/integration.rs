@@ -1,5 +1,5 @@
 //! 集成测试：
-//! 1. PEM 三证书解析（默认使用本机阿里云证书目录，可用 MQTTXX_CERT_DIR 覆盖）
+//! 1. PEM 三证书解析（目录由环境变量 `MQTTXX_CERT_DIR` 提供，未设置则跳过）
 //! 2. 对 broker.emqx.io 的真实回环测试（v4 / v5 / TLS / WS / WSS）
 //!
 //! 回环测试依赖外网，网络不可用时会失败——这是有意的验收信号。
@@ -18,10 +18,12 @@ fn unique_id(prefix: &str) -> String {
 // ---------------------------------------------------------------- TLS 配置构建
 
 #[test]
-fn tls_config_from_aliyun_certs() {
-    let dir = std::env::var("MQTTXX_CERT_DIR").unwrap_or_else(|_| {
-        r"D:\code\patrolsys\patrolsys-boot\src\main\resources\mqtt\aliyun".to_string()
-    });
+fn tls_config_from_cert_dir() {
+    // 证书目录只从环境变量读取，不在仓库中保存任何本地路径或证书内容
+    let Ok(dir) = std::env::var("MQTTXX_CERT_DIR") else {
+        eprintln!("skip: MQTTXX_CERT_DIR not set");
+        return;
+    };
     let dir = std::path::PathBuf::from(&dir);
     if !dir.exists() {
         eprintln!("skip: cert dir not found: {}", dir.display());
