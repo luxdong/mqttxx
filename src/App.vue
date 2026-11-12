@@ -4,6 +4,7 @@ import { useAppStore } from './stores/app'
 import { useConnStore } from './stores/connections'
 import ConnectionSidebar from './components/ConnectionSidebar.vue'
 import ConnectionForm from './components/ConnectionForm.vue'
+import TitleBar from './components/TitleBar.vue'
 
 const appStore = useAppStore()
 const connStore = useConnStore()
@@ -21,11 +22,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app-shell">
-    <ConnectionSidebar v-show="!appStore.connForm.visible" />
-    <main class="app-main">
-      <router-view />
-    </main>
+  <div class="app-root">
+    <TitleBar />
+    <div class="app-shell">
+      <ConnectionSidebar v-show="!appStore.connForm.visible" />
+      <main class="app-main">
+        <router-view />
+      </main>
+    </div>
     <ConnectionForm v-model="formVisible" :profile="appStore.connForm.editing" />
     <div class="toast-wrap">
       <div v-for="toast in appStore.toasts" :key="toast.id" class="toast" :class="toast.type">
@@ -36,9 +40,15 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.app-shell {
-  display: flex;
+.app-root {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 .app-main {
   flex: 1;
