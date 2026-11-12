@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::db::Db;
+use crate::settings;
+
 const RELEASE_API: &str = "https://gitee.com/api/v5/repos/oslu/mqttxx/releases/latest";
 
 #[derive(Debug, Deserialize)]
@@ -73,17 +76,36 @@ fn is_newer(latest: &str, current: &str) -> bool {
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
     let current = app.package_info().version.to_string();
-    let resp = reqwest::get(RELEASE_API)
+
+    // 可选的 Gitee 私人令牌：带认证调用解除匿名限流
+    let mut url = RELEASE_API.to_string();
+    let token = {
+        let state = app.state::<Db>();
+        let conn = state.0.lock().unwrap();
+        settings::get(&conn).gitee_token
+    };
+    if !token.trim().is_empty() {
+        url.push_str(&format!("?access_token={}", token.trim()));
+    }
+
+    let resp = reqwest::get(&url)
         .await
         .map_err(|e| format!("network: {e}"))?;
     if !resp.status().is_success() {
-        if resp.status().as_u16() == 404 {
-            return Err(
-                "gitee API 404: repository is private or has no release yet (make the repo public on gitee.com)"
-                    .into(),
-            );
+        match resp.status().as_u16() {
+            403 => {
+                return Err(
+                    "Gitee 匿名请求被限流(403)：请稍后再试，或在设置中配置 Gitee 私人令牌".into(),
+                )
+            }
+            404 => {
+                return Err(
+                    "gitee API 404: repository is private or has no release yet (make the repo public on gitee.com)"
+                        .into(),
+                )
+            }
+            s => return Err(format!("gitee api status: {s}")),
         }
-        return Err(format!("gitee api status: {}", resp.status()));
     }
     let rel: GiteeRelease = resp.json().await.map_err(|e| format!("parse: {e}"))?;
     let latest = rel.tag_name.as_deref().map(parse_version).unwrap_or_default();
@@ -169,6 +191,9 @@ pub async fn download_update(app: AppHandle, info: UpdateInfo) -> Result<String,
 }
 
 /// 运行安装包（静默），随后退出应用让安装器接管。
+///
+/// 采用延迟脚本方案避免"应用尚未退出安装器就抢文件锁"的竞态：
+/// 等 2s（应用退出）→ 静默安装 → 等 3s（安装完成）→ 自动重启新版本。
 #[tauri::command]
 pub async fn install_update(app: AppHandle, file_path: String) -> Result<(), String> {
     let path = std::path::PathBuf::from(&file_path);
@@ -179,16 +204,39 @@ pub async fn install_update(app: AppHandle, file_path: String) -> Result<(), Str
         .extension()
         .map(|e| e.eq_ignore_ascii_case("msi"))
         .unwrap_or(false);
-    let spawn_result = if is_msi {
-        std::process::Command::new("msiexec")
-            .args(["/i", &file_path, "/quiet"])
-            .spawn()
+    let relaunch = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string();
+
+    let installer = path.to_string_lossy().to_string();
+    let script = if is_msi {
+        format!(
+            "@echo off\r\n timeout /t 2 /nobreak >nul\r\n msiexec /i \"{installer}\" /quiet\r\n timeout /t 3 /nobreak >nul\r\n start \"\" \"{relaunch}\"\r\n"
+        )
     } else {
-        std::process::Command::new(&file_path).arg("/S").spawn()
+        format!(
+            "@echo off\r\n timeout /t 2 /nobreak >nul\r\n \"{installer}\" /S\r\n timeout /t 3 /nobreak >nul\r\n start \"\" \"{relaunch}\"\r\n"
+        )
     };
-    spawn_result.map_err(|e| format!("launch installer: {e}"))?;
-    // 给安装器进程一点启动时间，再退出应用释放文件锁
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    let bat = path
+        .parent()
+        .ok_or("no parent dir")?
+        .join("install-update.bat");
+    std::fs::write(&bat, script).map_err(|e| format!("write script: {e}"))?;
+
+    // CREATE_NO_WINDOW：不弹黑色命令行窗口
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    std::process::Command::new("cmd")
+        .args(["/C", &bat.to_string_lossy()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("launch installer: {e}"))?;
+
+    // 给脚本一点启动时间，再退出应用释放文件锁
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
     app.exit(0);
     Ok(())
 }

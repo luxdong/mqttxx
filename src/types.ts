@@ -115,6 +115,7 @@ export interface AppSettings {
   maxMessagesInMemory: number
   autoResub: boolean
   autoCheckUpdate: boolean
+  giteeToken: string
 }
 
 export type ConnStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error'

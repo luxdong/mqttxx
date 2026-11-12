@@ -84,6 +84,9 @@ function setAutoResub(v: boolean) {
 function setAutoCheckUpdate(v: boolean) {
   appStore.updateSettings({ autoCheckUpdate: v })
 }
+function setGiteeToken(v: string) {
+  appStore.updateSettings({ giteeToken: v })
+}
 </script>
 
 <template>
@@ -143,6 +146,18 @@ function setAutoCheckUpdate(v: boolean) {
         >
           {{ appStore.settings.autoCheckUpdate ? 'ON' : 'OFF' }}
         </button>
+      </div>
+      <div class="s-row">
+        <div class="s-label" :title="t('update.tokenHint')">{{ t('update.token') }}</div>
+        <input
+          class="field-input num"
+          type="password"
+          spellcheck="false"
+          autocomplete="off"
+          :value="appStore.settings.giteeToken"
+          :placeholder="t('update.tokenHint')"
+          @change="setGiteeToken(($event.target as HTMLInputElement).value.trim())"
+        />
       </div>
     </div>
 

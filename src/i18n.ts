@@ -120,9 +120,11 @@ const zh: Dict = {
   'update.downloading': '下载中…',
   'update.downloadDone': '下载完成',
   'update.install': '立即安装',
-  'update.installConfirm': '将退出应用并静默安装新版本，完成后请重新打开 MQTTXX。继续？',
+  'update.installConfirm': '应用将退出并静默安装新版本，安装完成后会自动重启。继续？',
   'update.autoCheck': '启动时自动检查更新',
   'update.failed': '检查更新失败',
+  'update.token': 'Gitee 私人令牌',
+  'update.tokenHint': '可选。匿名检查被限流(403)时配置令牌解除限制',
 }
 
 const en: Dict = {
@@ -243,9 +245,11 @@ const en: Dict = {
   'update.downloading': 'Downloading…',
   'update.downloadDone': 'Download complete',
   'update.install': 'Install now',
-  'update.installConfirm': 'The app will exit and install silently. Reopen MQTTXX afterwards. Continue?',
+  'update.installConfirm': 'The app will exit and install silently, then restart automatically. Continue?',
   'update.autoCheck': 'Check for updates on startup',
   'update.failed': 'Update check failed',
+  'update.token': 'Gitee personal token',
+  'update.tokenHint': 'Optional. Configure a token if anonymous checks get rate-limited (403)',
 }
 
 const dicts: Record<string, Dict> = { zh, en }

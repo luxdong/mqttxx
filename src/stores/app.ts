@@ -18,6 +18,7 @@ export const useAppStore = defineStore('app', {
       lang: 'zh',
       maxMessagesInMemory: 1000,
       autoResub: true,
+      giteeToken: '',
     } as AppSettings,
     inited: false,
     toasts: [] as Toast[],
