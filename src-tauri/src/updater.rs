@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use tauri::{AppHandle, Emitter, Manager};
 
-const RELEASE_API: &str = "https://gitee.com/api/v5/repos/oslu/mqttxx/releases/latest";
+const RELEASE_API: &str = "https://api.github.com/repos/luxdong/mqttxx/releases/latest";
 
 #[derive(Debug, Deserialize)]
 struct GiteeRelease {
@@ -73,19 +73,22 @@ fn is_newer(latest: &str, current: &str) -> bool {
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
     let current = app.package_info().version.to_string();
-    let resp = reqwest::get(RELEASE_API)
+    let resp = reqwest::Client::new()
+        .get(RELEASE_API)
+        // GitHub API 强制要求 User-Agent，缺失直接 403
+        .header("User-Agent", "mqttxx-updater")
+        .send()
         .await
         .map_err(|e| format!("network: {e}"))?;
     if !resp.status().is_success() {
         match resp.status().as_u16() {
-            403 => return Err("Gitee 匿名请求被限流(403)：请稍后再试".into()),
+            403 => return Err("GitHub 匿名请求被限流(403)：请稍后再试（限额 60 次/小时）".into()),
             404 => {
                 return Err(
-                    "gitee API 404: repository is private or has no release yet (make the repo public on gitee.com)"
-                        .into(),
+                    "github API 404: repository is private or has no release yet".into(),
                 )
             }
-            s => return Err(format!("gitee api status: {s}")),
+            s => return Err(format!("github api status: {s}")),
         }
     }
     let rel: GiteeRelease = resp.json().await.map_err(|e| format!("parse: {e}"))?;
