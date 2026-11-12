@@ -77,6 +77,12 @@ pub async fn check_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> 
         .await
         .map_err(|e| format!("network: {e}"))?;
     if !resp.status().is_success() {
+        if resp.status().as_u16() == 404 {
+            return Err(
+                "gitee API 404: repository is private or has no release yet (make the repo public on gitee.com)"
+                    .into(),
+            );
+        }
         return Err(format!("gitee api status: {}", resp.status()));
     }
     let rel: GiteeRelease = resp.json().await.map_err(|e| format!("parse: {e}"))?;
